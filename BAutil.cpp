@@ -1754,8 +1754,8 @@ else
 		filename = path + "/" + prefix + "Camera_Intrinsics" + postfix + ext;
 		saveCameraIntrinsics(filename, sep, camera);
 
-		filename = path + "/" + "DevicesIntrinsics" +  ext;
-		SaveIntrinsicResults(filename, sep, camera);
+		//filename = path + "/" + "DevicesIntrinsics" +  ext;
+		//SaveIntrinsicResults(filename, sep, camera);
 
 		filename = path + "/" + prefix + "ReprojectionError" + postfix + ext;
 		saveReprojectionError(filename, sep, res, camera, 0);

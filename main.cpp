@@ -23,7 +23,7 @@ int main(int argc, char* argv[])
 		return 0;
 	}*/
 
-	argv[1] = "C:/Data/CellPhone",
+	argv[1] = "C:/Data/CellPhone/Corpus/VisSfm",
 		argv[2] = "0", // fixed intrinsic in NVM
 		argv[3] = "Corpus.nvm",
 		argv[4] = "0", //Shared cameraInfo
