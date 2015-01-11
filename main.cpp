@@ -17,23 +17,22 @@ void Help()
 int main(int argc, char* argv[])
 {
 
-	if (argc == 1)
+	/*if (argc == 1)
 	{
 		Help();
 		return 0;
-	}
+	}*/
 
-	/*argv[1] = "D:/Disney",
+	argv[1] = "C:/Data/CellPhone",
 		argv[2] = "0", // fixed intrinsic in NVM
 		argv[3] = "Corpus.nvm",
 		argv[4] = "0", //Shared cameraInfo
 		argv[5] = "CamInfo.txt",
-		argv[6] = "1", //Optimize for shared intrinisc
+		argv[6] = "2", //Optimize for shared intrinisc
 		argv[7] = "0",//Lens conversion
 		argv[8] = "5";//thresholdd. If minus value, all points from NVM are regarded as inliers.
 		//argv[9] = "Intrinsics.txt",
-		
-		argc = 9;*/
+		argc = 9;
 
 	int NVMfixIntrinisc = atoi(argv[2]),
 		sharedCamInfo = atoi(argv[4]),
@@ -113,11 +112,30 @@ int main(int argc, char* argv[])
 	cout << "\n" << "Run Bundle Adjustment..." << endl;
 	cout << "\t# of Cameras: " << camera_before.size() << "\n" << "\t# of Points : " << nvmdata.n3dPoints << "\n" << endl;
 
-	if (sharedIntrinsics)
+	if (sharedIntrinsics==1)
 	{
 		BA::runBundleAdjustmentSharedIntrinsic(camera_after, xyz_after, options, summary, thresh);
 		for (int ii = 1; ii < camera_after.size(); ii++)
 			copyIntrinsic(camera_after[0], camera_after[ii]);
+	}
+	else if (sharedIntrinsics == 2)
+	{
+		BA::runBundleAdjustmentPartiallySharedIntrinsic(camera_after, xyz_after, options, summary, thresh);
+
+		BA::CameraData MasterSharedIntrinisc;
+		for (int ii = 0; ii < camera_after.size(); ii++)
+		{
+			if (camera_after[ii].available && camera_after[ii].sharedIntrinisc)
+			{
+				printf("found the master at %d\n", ii);
+				copyIntrinsic(camera_after[ii], MasterSharedIntrinisc);
+				break;
+			}
+		}
+	
+		for (int ii = 0; ii < camera_after.size(); ii++)
+			if (camera_after[ii].available && camera_after[ii].sharedIntrinisc)
+				copyIntrinsic(MasterSharedIntrinisc, camera_after[ii]);
 	}
 	else
 		BA::runBundleAdjustment(camera_after, xyz_after, options, summary, thresh);

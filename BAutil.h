@@ -88,6 +88,7 @@ namespace BA
 		//bool convert_1st_radial;
 
 		bool available;//if false, not used in BA
+		bool sharedIntrinisc;
 		int lenstype;
 
 		//point info (used for BA)
@@ -207,6 +208,7 @@ namespace BA
 	bool saveAllData(const string path, const vector<CameraData> &camera, const vector< vector<double> > &xyz, const residualData &res, const string prefix, const bool After);
 	bool saveCameraAllParams(const string file_fullpath, const string separator, const vector<CameraData> &camera);
 	bool saveCameraAllParams2(const string file_fullpath, const string separator, const vector<CameraData> &camera);
+	bool SaveIntrinsicResults(const string filename, const string sep, const vector<CameraData> &AllViewsParas);
 	bool saveCameraIntrinsics(const string file_fullpath, const string separator, const vector<CameraData> &camera);
 	bool saveCameraExtrinsics(const string file_fullpath, const string separator, const vector<CameraData> &camera);
 	bool save3Dpoints(const string file_fullpath, const string separator, const vector< vector<double> > &xyz);
@@ -221,6 +223,7 @@ namespace BA
 	void calcReprojectionError(const vector<CameraData> &camera, const vector< vector<double> > &xyz, residualData &res, double thresh);
 	void runBundleAdjustment(vector<CameraData> &camera, vector< vector<double> > &xyz, const ceres::Solver::Options &options, ceres::Solver::Summary &summary, const double thresh = 3.0);
 	void runBundleAdjustmentSharedIntrinsic(vector<CameraData> &camera, vector< vector<double> > &xyz, const ceres::Solver::Options &options, ceres::Solver::Summary &summary, const double thresh = 3.0);
+	void runBundleAdjustmentPartiallySharedIntrinsic(vector<CameraData> &camera, vector< vector<double> > &xyz, const ceres::Solver::Options &options, ceres::Solver::Summary &summary, const double thresh = 3.0);
 	void runBundleAdjustment(vector<CameraData> &camera, vector< vector<double> > &xyz, vector< vector<bool> > &visMap, const double thresh, const ceres::Solver::Options &options, ceres::Solver::Summary &summary);
 	void checkOutlier(vector<CameraData> &camera, vector< vector<double> > &xyz, vector< vector<bool> > &visMap, const double thresh);
 

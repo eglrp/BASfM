@@ -433,6 +433,201 @@ namespace BA
 
 		ceres::Solve(options, &problem, &summary);
 	}
+	void runBundleAdjustmentPartiallySharedIntrinsic(vector<CameraData> &camera, vector< vector<double> > &xyz, const ceres::Solver::Options &options, ceres::Solver::Summary &summary, const double thresh)
+	{
+		const int nCameras = camera.size();
+
+		//Set camera 0 as master camera
+		CameraData *cam = &camera[0];
+		if (!cam->available)
+		{
+			printf("Master camera (#0) is not available!\n");
+			return;
+		}
+		bool firstSharedCamAdded = false;
+		double *focalS, *imcenterS, *skewS,
+			*rad_1stS, *rad_otherS, *tangentialS, *prismS,
+			*omegaS, *DistCtrS;
+
+		// problem setting
+		ceres::Problem problem;
+		for (int camID = 0; camID < nCameras; camID++)
+		{
+			CameraData *cam = &camera[camID];
+			if (!cam->available)
+				continue;
+
+			if (cam->sharedIntrinisc == true && !firstSharedCamAdded)
+				focalS = cam->FocalLength, imcenterS = cam->OpticalCenter, skewS = &cam->Skew,
+				rad_1stS = &cam->Radialfirst, rad_otherS = cam->Radialothers, tangentialS = cam->Tangential, prismS = cam->Prism,
+				omegaS = &cam->omega, DistCtrS = cam->DistCtr;
+
+
+			double *focal = cam->FocalLength, *imcenter = cam->OpticalCenter, *skew = &cam->Skew,
+				*rad_1st = &cam->Radialfirst, *rad_other = cam->Radialothers, *tangential = cam->Tangential, *prism = cam->Prism,
+				*omega = &cam->omega, *DistCtr = cam->DistCtr;
+
+			double *angleaxis = cam->AngleAxis, *trans = cam->Translation;
+
+			const int nPoints = cam->point2D.size();
+			for (int i = 0; i < nPoints; i++)
+			{
+				double observed_x = cam->point2D[i][0], observed_y = cam->point2D[i][1];
+
+				int     ptID = cam->ptID[i];
+				double *pt3D = &xyz[ptID][0];
+
+				if (thresh > 0)
+				{
+					double reprojected_pt[2];
+					if (cam->lenstype == BA_LENS_PINHOLE)
+						PinholeReprojection(focal, imcenter, skew, rad_1st, rad_other, tangential, prism, angleaxis, trans, pt3D, reprojected_pt);
+					else
+						FOVReprojection(focal, imcenter, skew, omega, DistCtr, angleaxis, trans, pt3D, reprojected_pt);
+
+					double residual_x = reprojected_pt[0] - observed_x;
+					double residual_y = reprojected_pt[1] - observed_y;
+					double distance = sqrt(residual_x*residual_x + residual_y*residual_y);
+
+					if (distance > thresh)
+					{
+						cam->inlier[i] = false;
+						continue;
+					}
+				}
+
+				if (cam->lenstype == BA_LENS_PINHOLE)
+				{
+					if (cam->sharedIntrinisc == true)
+					{
+						ceres::CostFunction* cost_function = PinholeReprojectionError::Create(observed_x, observed_y);
+						problem.AddResidualBlock(cost_function, NULL, focalS, imcenterS, skewS, rad_1stS, rad_otherS, tangentialS, prismS, angleaxis, trans, pt3D);
+					}
+					else
+					{
+						ceres::CostFunction* cost_function = PinholeReprojectionError::Create(observed_x, observed_y);
+						problem.AddResidualBlock(cost_function, NULL, focal, imcenter, skew, rad_1st, rad_other, tangential, prism, angleaxis, trans, pt3D);
+					}
+				}
+				else
+				{
+					if (cam->sharedIntrinisc == true)
+					{
+						ceres::CostFunction* cost_function = FOVReprojectionError::Create(observed_x, observed_y);
+						problem.AddResidualBlock(cost_function, NULL, focalS, imcenterS, skewS, omegaS, DistCtrS, angleaxis, trans, pt3D);
+					}
+					else
+					{
+						ceres::CostFunction* cost_function = FOVReprojectionError::Create(observed_x, observed_y);
+						problem.AddResidualBlock(cost_function, NULL, focal, imcenter, skew, omega, DistCtr, angleaxis, trans, pt3D);
+					}
+				}
+			}
+
+			//Set up constraints
+			if (cam->sharedIntrinisc && !firstSharedCamAdded)
+			{
+				firstSharedCamAdded = true;
+				switch (cam->opt_intrinsic)
+				{
+				case BA_OPT_INTRINSIC_ALL_FIXED:
+					problem.SetParameterBlockConstant(focalS);
+					problem.SetParameterBlockConstant(imcenterS);
+					problem.SetParameterBlockConstant(skewS);
+					break;
+
+				case BA_OPT_INTRINSIC_CENTER_FIXED:
+					problem.SetParameterBlockConstant(imcenterS);
+					break;
+
+				case BA_OPT_INTRINSIC_SKEW_ZERO_FIXED:
+				case BA_OPT_INTRINSIC_SKEW_FIXED:
+					problem.SetParameterBlockConstant(skewS);
+					break;
+				}
+
+				if (cam->lenstype == BA_LENS_PINHOLE)
+				{
+					switch (cam->opt_lensdistortion)
+					{
+					case BA_OPT_LENSDIST_RADIAL_AND_TANGENTIAL:
+						problem.SetParameterBlockConstant(prismS);
+						break;
+
+					case BA_OPT_LENSDIST_ALL_FIXED:
+						problem.SetParameterBlockConstant(rad_1stS);
+						problem.SetParameterBlockConstant(rad_otherS);
+						problem.SetParameterBlockConstant(tangentialS);
+						problem.SetParameterBlockConstant(prismS);
+						break;
+
+
+					case BA_OPT_LENSDIST_RADIAL_1ST_ONLY:
+						problem.SetParameterBlockConstant(rad_otherS);
+						problem.SetParameterBlockConstant(tangentialS);
+						problem.SetParameterBlockConstant(prismS);
+						break;
+
+					case BA_OPT_LENSDIST_RADIAL_ONLY:
+						problem.SetParameterBlockConstant(tangentialS);
+						problem.SetParameterBlockConstant(prismS);
+						break;
+					}
+				}
+			}
+			else if ((cam->sharedIntrinisc && firstSharedCamAdded) && !cam->sharedIntrinisc)
+			{
+				switch (cam->opt_intrinsic)
+				{
+				case BA_OPT_INTRINSIC_ALL_FIXED:
+					problem.SetParameterBlockConstant(focal);
+					problem.SetParameterBlockConstant(imcenter);
+					problem.SetParameterBlockConstant(skew);
+					break;
+
+				case BA_OPT_INTRINSIC_CENTER_FIXED:
+					problem.SetParameterBlockConstant(imcenter);
+					break;
+
+				case BA_OPT_INTRINSIC_SKEW_ZERO_FIXED:
+				case BA_OPT_INTRINSIC_SKEW_FIXED:
+					problem.SetParameterBlockConstant(skew);
+					break;
+				}
+
+				if (cam->lenstype == BA_LENS_PINHOLE)
+				{
+					switch (cam->opt_lensdistortion)
+					{
+					case BA_OPT_LENSDIST_RADIAL_AND_TANGENTIAL:
+						problem.SetParameterBlockConstant(prism);
+						break;
+
+					case BA_OPT_LENSDIST_ALL_FIXED:
+						problem.SetParameterBlockConstant(rad_1st);
+						problem.SetParameterBlockConstant(rad_other);
+						problem.SetParameterBlockConstant(tangential);
+						problem.SetParameterBlockConstant(prism);
+						break;
+
+
+					case BA_OPT_LENSDIST_RADIAL_1ST_ONLY:
+						problem.SetParameterBlockConstant(rad_other);
+						problem.SetParameterBlockConstant(tangential);
+						problem.SetParameterBlockConstant(prism);
+						break;
+
+					case BA_OPT_LENSDIST_RADIAL_ONLY:
+						problem.SetParameterBlockConstant(tangential);
+						problem.SetParameterBlockConstant(prism);
+						break;
+					}
+				}
+			}
+		}
+
+		ceres::Solve(options, &problem, &summary);
+	}
 	void runBundleAdjustment(vector<CameraData> &camera, vector< vector<double> > &xyz, vector< vector<bool> > &visMap, const double thresh, const ceres::Solver::Options &options, ceres::Solver::Summary &summary)
 	{
 		//remove outliers
@@ -800,10 +995,11 @@ namespace BA
 
 		vector<int> imgWidth, imgHeight, opt_intrinsic, opt_lensdistortion, opt_extrinsic;
 		vector<bool> available;
+		vector<bool> intrinsicShared;
 		vector<string> filenames;
 		string str;
 		char tfile[200];
-		if (sharedIntrinisc)
+		if (sharedIntrinisc == 1)
 		{
 			int w, h, option1, option2, option3;
 			getline(ifs, str);
@@ -845,10 +1041,10 @@ namespace BA
 			while (getline(ifs, str))
 			{
 				string file;
-				int w, h, option1, option2, option3, avail;
+				int w, h, option1, option2, option3, avail, shared;
 
 				stringstream ss(str);
-				ss >> file >> w >> h >> option1 >> option2 >> option3 >> avail;
+				ss >> file >> w >> h >> option1 >> option2 >> option3 >> avail >> shared;
 
 				if (!checkOptionIntrinsics(option1))
 				{
@@ -875,6 +1071,11 @@ namespace BA
 
 				bool flag = avail > 0 ? true : false;
 				available.push_back(flag);
+
+				if (shared == 1)
+					intrinsicShared.push_back(true);
+				else
+					intrinsicShared.push_back(false);
 			}
 		}
 
@@ -924,6 +1125,7 @@ namespace BA
 			cam->opt_lensdistortion = opt_lensdistortion[i];
 			cam->opt_extrinsic = opt_extrinsic[i];
 			cam->available = available[i];
+			cam->sharedIntrinisc = intrinsicShared[i];
 
 			cam->FocalLength[0] = nvmdata.focallength[camID];
 			cam->FocalLength[1] = nvmdata.focallength[camID];
@@ -969,7 +1171,6 @@ namespace BA
 			{
 				if (!load_ok[camID])
 					cerr << nvmdata.filenames[camID] << endl;
-
 			}
 
 			return false;
@@ -1288,46 +1489,46 @@ namespace BA
 			if (!camera[camID].available)
 				continue;
 
-			string file = camera[camID].filename;
+string file = camera[camID].filename;
 
-			double fx = camera[camID].FocalLength[0];
-			double fy = camera[camID].FocalLength[1];
-			double s = camera[camID].Skew;
-			double u0 = camera[camID].OpticalCenter[0];
-			double v0 = camera[camID].OpticalCenter[1];
+double fx = camera[camID].FocalLength[0];
+double fy = camera[camID].FocalLength[1];
+double s = camera[camID].Skew;
+double u0 = camera[camID].OpticalCenter[0];
+double v0 = camera[camID].OpticalCenter[1];
 
-			double r0 = camera[camID].AngleAxis[0];
-			double r1 = camera[camID].AngleAxis[1];
-			double r2 = camera[camID].AngleAxis[2];
-			double t0 = camera[camID].Translation[0];
-			double t1 = camera[camID].Translation[1];
-			double t2 = camera[camID].Translation[2];
+double r0 = camera[camID].AngleAxis[0];
+double r1 = camera[camID].AngleAxis[1];
+double r2 = camera[camID].AngleAxis[2];
+double t0 = camera[camID].Translation[0];
+double t1 = camera[camID].Translation[1];
+double t2 = camera[camID].Translation[2];
 
-			if (camera[camID].lenstype == BA_LENS_PINHOLE)
-			{
-				double a0 = camera[camID].Radialfirst;
-				double a1 = camera[camID].Radialothers[0];
-				double a2 = camera[camID].Radialothers[1];
-				double p0 = camera[camID].Tangential[0];
-				double p1 = camera[camID].Tangential[1];
-				double s0 = camera[camID].Prism[0];
-				double s1 = camera[camID].Prism[1];
-				ofs << file << sep << camera[0].lenstype << sep << camera[camID].imgWidth << sep << camera[camID].imgHeight << sep
-					<< fx << sep << fy << sep << s << sep << u0 << sep << v0 << sep
-					<< a0 << sep << a1 << sep << a2 << sep
-					<< p0 << sep << p1 << sep << s0 << sep << s1 << sep
-					<< r0 << sep << r1 << sep << r2 << sep
-					<< t0 << sep << t1 << sep << t2 << endl;
-			}
-			else
-			{
-				double omega = camera[camID].omega, DistCtrX = camera[camID].DistCtr[0], DistCtrY = camera[camID].DistCtr[1];
-				ofs << file << sep << camera[0].lenstype << sep << camera[camID].imgWidth << sep << camera[camID].imgHeight << sep
-					<< fx << sep << fy << sep << s << sep << u0 << sep << v0 << sep
-					<< omega << sep << DistCtrX << sep << DistCtrY << sep
-					<< r0 << sep << r1 << sep << r2 << sep
-					<< t0 << sep << t1 << sep << t2 << endl;
-			}
+if (camera[camID].lenstype == BA_LENS_PINHOLE)
+{
+	double a0 = camera[camID].Radialfirst;
+	double a1 = camera[camID].Radialothers[0];
+	double a2 = camera[camID].Radialothers[1];
+	double p0 = camera[camID].Tangential[0];
+	double p1 = camera[camID].Tangential[1];
+	double s0 = camera[camID].Prism[0];
+	double s1 = camera[camID].Prism[1];
+	ofs << file << sep << camera[0].lenstype << sep << camera[camID].imgWidth << sep << camera[camID].imgHeight << sep
+		<< fx << sep << fy << sep << s << sep << u0 << sep << v0 << sep
+		<< a0 << sep << a1 << sep << a2 << sep
+		<< p0 << sep << p1 << sep << s0 << sep << s1 << sep
+		<< r0 << sep << r1 << sep << r2 << sep
+		<< t0 << sep << t1 << sep << t2 << endl;
+}
+else
+{
+	double omega = camera[camID].omega, DistCtrX = camera[camID].DistCtr[0], DistCtrY = camera[camID].DistCtr[1];
+	ofs << file << sep << camera[0].lenstype << sep << camera[camID].imgWidth << sep << camera[camID].imgHeight << sep
+		<< fx << sep << fy << sep << s << sep << u0 << sep << v0 << sep
+		<< omega << sep << DistCtrX << sep << DistCtrY << sep
+		<< r0 << sep << r1 << sep << r2 << sep
+		<< t0 << sep << t1 << sep << t2 << endl;
+}
 		}
 
 		return true;
@@ -1359,6 +1560,64 @@ namespace BA
 			ofs << file << sep
 				<< r0 << sep << r1 << sep << r2 << sep
 				<< t0 << sep << t1 << sep << t2 << endl;
+		}
+
+		return true;
+	}
+
+	bool SaveIntrinsicResults(const string filename, const string sep, const vector<CameraData> &AllViewsParas)
+	{
+		//Note that visCamualSfm use different lens model than openCV or matlab or yours (inverse model)
+		int id = 0, LensType;
+		double fx, fy, skew, u0, v0, r0, r1, r2, t0, t1, p0, p1, omega, DistCtrX, DistCtrY;
+
+		ofstream ofs(filename);
+		if (ofs.fail())
+		{
+			cerr << "Cannot write " << filename << endl;
+			return false;
+		}
+		ofs << scientific << setprecision(16);
+
+		int nCams = AllViewsParas.size();
+		for (int ii = 0; ii < nCams; ii++)
+		{
+			int id = ii;
+			for (int jj = 0; nCams; jj++)
+			{
+				string filename = AllViewsParas[jj].filename;
+				std::size_t pos = AllViewsParas[jj].filename.find(".ppm");
+				filename.erase(pos, 4);
+				const char * str = filename.c_str();
+				int viewId = atoi(str);
+				if (viewId == id)
+				{
+					id = jj;
+					break;
+				}
+			}
+
+			LensType = AllViewsParas[id].lenstype;
+			fx = AllViewsParas[id].FocalLength[0], fy = AllViewsParas[id].FocalLength[1], skew = AllViewsParas[id].Skew, u0 = AllViewsParas[id].OpticalCenter[0], v0 = AllViewsParas[id].OpticalCenter[1];
+
+			if (LensType == BA_LENS_PINHOLE)
+			{
+				r0 = AllViewsParas[id].Radialfirst, r1 = AllViewsParas[id].Radialothers[0], r2 = AllViewsParas[id].Radialothers[1];
+				t0 = AllViewsParas[id].Tangential[0], t1 = AllViewsParas[id].Tangential[1];
+
+				ofs << LensType << sep << AllViewsParas[id].imgWidth << sep << AllViewsParas[id].imgHeight << sep
+					<< fx << sep << fy << sep << skew << sep << u0 << sep << v0 << sep
+					<< r0 << sep << r1 << sep << r2 << sep
+					<< t0 << sep << t1 << sep << 0.0 << sep << 0.0 << endl;
+			}
+			else
+			{
+				omega = AllViewsParas[id].omega, DistCtrX = AllViewsParas[id].DistCtr[0], DistCtrY = AllViewsParas[id].DistCtr[1];
+
+				ofs << LensType << sep << AllViewsParas[id].imgWidth << sep << AllViewsParas[id].imgHeight << sep
+					<< fx << sep << fy << sep << skew << sep << u0 << sep << v0 << sep
+					<< omega << sep << DistCtrX << sep << DistCtrY << endl;
+			}
 		}
 
 		return true;
@@ -1494,6 +1753,9 @@ namespace BA
 
 		filename = path + "/" + prefix + "Camera_Intrinsics" + postfix + ext;
 		saveCameraIntrinsics(filename, sep, camera);
+
+		filename = path + "/" + "DevicesIntrinsics" +  ext;
+		SaveIntrinsicResults(filename, sep, camera);
 
 		filename = path + "/" + prefix + "ReprojectionError" + postfix + ext;
 		saveReprojectionError(filename, sep, res, camera, 0);
