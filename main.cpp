@@ -3,13 +3,13 @@
 
 void Help()
 {
-	printf("Usage: BAfromVSFM.exe <Path> <Fixed intrinsic NVM> <nvm file> <Shared intrinsic cameraInfo> <cameraInfo file> <optim shared intrinisc>  \n <Convert Lens model> <Inlier threshold><Intrinsic file>\n");
+	printf("Usage: BAfromVSFM.exe <Path> <Fixed intrinsic used in NVM> <nvm file> <Shared intrinsic cameraInfo> <cameraInfo file> <optim shared intrinisc>  \n <Convert Lens model> <Inlier threshold><Intrinsic file>\n");
 	printf("<nvm file>: result from Visual SFM\n");
 	printf("<camera ini file>: filename width height  intrinisc options, lens distortion options, extrinsic options, availbiltiy (not needed for shared intrinisc)\n");
 	printf("<intrinsic param file>: (optional)  filename fx fy skew u0 v0 radiral(1,2,3) tangential(1,2) prism(1,2)\n");
 
 	printf("Options for intrinisc:\n BA_OPT_INTRINSIC_ALL = 0\n BA_OPT_INTRINSIC_ALL_FIXED = 1\n BA_OPT_INTRINSIC_SKEW_FIXED = 2\n BA_OPT_INTRINSIC_SKEW_ZERO_FIXED = 3\n BA_OPT_INTRINSIC_CENTER_FIXED = 4\n");
-	printf("Options for lens distorion:\n BA_LENS_FISHEYE = -1\n BA_OPT_LENSDIST_RADIAL_AND_TANGENTIAL  = 0\n BA_OPT_LENSDIST_ALL_FIXED = 1\n BA_OPT_LENSDIST_RADIAL_1ST_ONLY = 2\n BA_OPT_LENSDIST_RADIAL_ONLY =3\n");
+	printf("Options for lens distorion:\n BA_LENS_FISHEYE_FIXED = -2\n BA_LENS_FISHEYE = -1\n BA_OPT_LENSDIST_RADIAL_AND_TANGENTIAL  = 0\n BA_OPT_LENSDIST_ALL_FIXED = 1\n BA_OPT_LENSDIST_RADIAL_1ST_ONLY = 2\n BA_OPT_LENSDIST_RADIAL_ONLY =3\n");
 	printf("Options for extrinisc:\n BA_OPT_EXTRINSIC_ALL  = 0\n BA_OPT_EXTRINSIC_ALL_FIXED = 1\n BA_OPT_EXTRINSIC_R_FIXED = 2\n BA_OPT_EXTRINSIC_T_FIXED = 3\n");
 
 	return;
@@ -17,22 +17,22 @@ void Help()
 int main(int argc, char* argv[])
 {
 
-	/*if (argc == 1)
+	if (argc == 1)
 	{
 		Help();
 		return 0;
-	}*/
+	}
 
-	argv[1] = "C:/Data/CellPhone/Corpus/VisSfm",
+	/*argv[1] = "E:/Data/Phuong/Corpus",
 		argv[2] = "0", // fixed intrinsic in NVM
 		argv[3] = "Corpus.nvm",
 		argv[4] = "0", //Shared cameraInfo
 		argv[5] = "CamInfo.txt",
-		argv[6] = "2", //Optimize for shared intrinisc
+		argv[6] = "0", //Optimize for shared intrinisc
 		argv[7] = "0",//Lens conversion
 		argv[8] = "5";//thresholdd. If minus value, all points from NVM are regarded as inliers.
-		//argv[9] = "Intrinsics.txt",
-		argc = 9;
+		argv[9] = "Intrinsics.txt",
+		argc = 10;*/
 
 	int NVMfixIntrinisc = atoi(argv[2]),
 		sharedCamInfo = atoi(argv[4]),
@@ -180,3 +180,5 @@ int main(int argc, char* argv[])
 
 	return 0;
 }
+
+

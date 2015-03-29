@@ -1257,9 +1257,10 @@ namespace BA
 			while (getline(ifs, str))
 			{
 				string file;
+				int lenstype, w, h;
 				double fx, fy, s, u0, v0, a0, a1, a2, p0, p1, s0, s1;
 				stringstream ss(str);
-				ss >> file
+				ss >> file >> lenstype>>w>>h
 					>> fx >> fy >> s >> u0 >> v0
 					>> a0 >> a1 >> a2
 					>> p0 >> p1 >> s0 >> s1;
@@ -1279,6 +1280,7 @@ namespace BA
 
 				int camID = itr->second;
 
+				camera[camID].lenstype = lenstype;
 				camera[camID].FocalLength[0] = fx, camera[camID].FocalLength[1] = fy, camera[camID].Skew = s, camera[camID].OpticalCenter[0] = u0, camera[camID].OpticalCenter[1] = v0;
 
 				camera[camID].Radialfirst = a0, camera[camID].Radialothers[0] = a1, camera[camID].Radialothers[1] = a2;
@@ -1569,7 +1571,7 @@ else
 	{
 		//Note that visCamualSfm use different lens model than openCV or matlab or yours (inverse model)
 		int id = 0, LensType;
-		double fx, fy, skew, u0, v0, r0, r1, r2, t0, t1, p0, p1, omega, DistCtrX, DistCtrY;
+		double fx, fy, skew, u0, v0, r0, r1, r2, t0, t1, omega, DistCtrX, DistCtrY;
 
 		ofstream ofs(filename);
 		if (ofs.fail())

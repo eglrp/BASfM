@@ -18,7 +18,6 @@
 #include "ceres/ceres.h"
 #include "ceres/types.h"
 #include "ceres/rotation.h"
-#include "gflags/gflags.h"
 #include "glog/logging.h"
 
 using namespace std;
